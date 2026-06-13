@@ -534,8 +534,8 @@ export default function App() {
           ) : (
             <div className="detail-stack">
               <div className="detail-hero">
-                <div>
-                  <h3>{selectedEvaluation.name || selectedEvaluation.run_id}</h3>
+                <div className="detail-hero-copy">
+                  <h3 className="detail-title">{selectedEvaluation.name || selectedEvaluation.run_id}</h3>
                   <p>
                     {selectedEvaluation.model_name} · {selectedEvaluation.repr_type} → {selectedEvaluation.task_type}
                   </p>
