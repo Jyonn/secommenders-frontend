@@ -173,14 +173,33 @@ button {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: 0.8fr 1fr 1.2fr;
+  grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.38fr);
   gap: 1rem;
   margin-top: 1rem;
+  align-items: start;
 }
 
 .panel {
   padding: 1rem;
   min-height: 420px;
+  min-width: 0;
+}
+
+.overview-stack,
+.detail-panel,
+.leaderboard-panel,
+.evaluations-panel,
+.detail-stack,
+.section-head,
+.section-head > div,
+.leaderboard-list,
+.evaluation-table {
+  min-width: 0;
+}
+
+.overview-stack {
+  display: grid;
+  gap: 1rem;
 }
 
 .section-head {
@@ -234,6 +253,7 @@ button {
 .evaluation-row,
 .experiment-card {
   width: 100%;
+  min-width: 0;
   text-align: left;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 94%, white 6%), var(--surface));
@@ -255,7 +275,7 @@ button {
 
 .leaderboard-entry {
   display: grid;
-  grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.9rem minmax(0, 1fr) minmax(6.5rem, auto);
   gap: 0.9rem;
   align-items: center;
 }
@@ -266,10 +286,23 @@ button {
   color: var(--accent);
 }
 
+.leaderboard-body,
+.leaderboard-score,
+.evaluation-title,
+.evaluation-meta,
+.detail-hero > div,
+.detail-columns > div,
+.experiment-card {
+  min-width: 0;
+}
+
 .leaderboard-body strong,
 .evaluation-title strong {
   display: block;
   font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .leaderboard-body p,
@@ -281,8 +314,18 @@ button {
   line-height: 1.5;
 }
 
+.leaderboard-body p,
+.evaluation-title p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .leaderboard-score {
   text-align: right;
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
 }
 
 .leaderboard-score span,
@@ -306,6 +349,15 @@ button {
   align-items: center;
 }
 
+.evaluation-row-main {
+  align-items: start;
+}
+
+.evaluation-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .evaluation-meta {
   display: flex;
   gap: 0.6rem;
@@ -314,6 +366,7 @@ button {
   justify-content: flex-end;
   color: var(--ink-soft);
   font-size: 0.92rem;
+  flex: 0 1 46%;
 }
 
 .pill,
@@ -383,6 +436,7 @@ button {
   justify-content: space-between;
   gap: 1rem;
   align-items: start;
+  min-width: 0;
 }
 
 .detail-hero h3 {
@@ -445,6 +499,7 @@ button {
   border-radius: 1.2rem;
   background: var(--surface);
   overflow: hidden;
+  min-width: 0;
 }
 
 .detail-block h4 {
@@ -491,6 +546,23 @@ button {
   }
 }
 
+@media (max-width: 1480px) {
+  .filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .leaderboard-entry {
+    grid-template-columns: 2.7rem minmax(0, 1fr);
+  }
+
+  .leaderboard-score {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+    padding-top: 0.15rem;
+  }
+}
+
 @media (max-width: 860px) {
   .app-shell {
     width: min(100vw - 1rem, 100%);
@@ -514,9 +586,16 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .leaderboard-score {
+    grid-column: auto;
+  }
+
   .evaluation-meta,
   .detail-tags {
     justify-content: flex-start;
   }
-}
 
+  .evaluation-meta {
+    flex: 1 1 auto;
+  }
+}

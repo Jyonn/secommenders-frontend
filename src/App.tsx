@@ -404,117 +404,119 @@ export default function App() {
       {error ? <div className="error-shell">{error}</div> : null}
 
       <main className="workspace-grid">
-        <section className="panel leaderboard-panel">
-          <div className="section-head">
-            <div>
-              <p className="section-kicker">Leaderboard</p>
-              <h2>What is actually winning</h2>
+        <div className="overview-stack">
+          <section className="panel leaderboard-panel">
+            <div className="section-head">
+              <div>
+                <p className="section-kicker">Leaderboard</p>
+                <h2>What is actually winning</h2>
+              </div>
+              <span className="section-note">metric={metric}</span>
             </div>
-            <span className="section-note">metric={metric}</span>
-          </div>
-          {loadingOverview ? (
-            <div className="loading-shell">Loading leaderboard…</div>
-          ) : (
-            <div className="leaderboard-list">
-              {leaderboard.map((row, index) => (
-                <button
-                  key={row.signature}
-                  className={`leaderboard-entry ${selectedSignature === row.signature ? 'selected' : ''}`}
-                  onClick={() => setSelectedSignature(row.signature)}
-                >
-                  <div className="leaderboard-rank">{String(index + 1).padStart(2, '0')}</div>
-                  <div className="leaderboard-body">
-                    <strong>{row.name || row.run_id || row.signature.slice(0, 10)}</strong>
-                    <p>
-                      {row.model_name} · {row.repr_type} → {row.task_type}
-                    </p>
-                  </div>
-                  <div className="leaderboard-score">
-                    <span>{row.metric}</span>
-                    <strong>{row.mean.toFixed(4)}</strong>
-                    <em>±{row.std.toFixed(4)}</em>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+            {loadingOverview ? (
+              <div className="loading-shell">Loading leaderboard…</div>
+            ) : (
+              <div className="leaderboard-list">
+                {leaderboard.map((row, index) => (
+                  <button
+                    key={row.signature}
+                    className={`leaderboard-entry ${selectedSignature === row.signature ? 'selected' : ''}`}
+                    onClick={() => setSelectedSignature(row.signature)}
+                  >
+                    <div className="leaderboard-rank">{String(index + 1).padStart(2, '0')}</div>
+                    <div className="leaderboard-body">
+                      <strong>{row.name || row.run_id || row.signature.slice(0, 10)}</strong>
+                      <p>
+                        {row.model_name} · {row.repr_type} → {row.task_type}
+                      </p>
+                    </div>
+                    <div className="leaderboard-score">
+                      <span>{row.metric}</span>
+                      <strong>{row.mean.toFixed(4)}</strong>
+                      <em>±{row.std.toFixed(4)}</em>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
 
-        <section className="panel evaluations-panel">
-          <div className="section-head">
-            <div>
-              <p className="section-kicker">Evaluations</p>
-              <h2>Runs in circulation</h2>
-            </div>
-            <div className="inline-metrics">
-              <span>completed {currentSnapshot.completed}</span>
-              <span>running {currentSnapshot.running}</span>
-              <span>failed {currentSnapshot.failed}</span>
-            </div>
-          </div>
-          {loadingOverview ? (
-            <div className="loading-shell">Loading evaluations…</div>
-          ) : (
-            <>
-              <div className="evaluation-table">
-                {evaluations.map((evaluation) => {
-                  const tone = statusTone(
-                    evaluation.status_summary.completed,
-                    evaluation.status_summary.running,
-                    evaluation.status_summary.failed,
-                  );
-                  return (
-                    <button
-                      key={evaluation.signature}
-                      className={`evaluation-row ${selectedSignature === evaluation.signature ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedSignature(evaluation.signature);
-                        setOpenedLogSession(null);
-                      }}
-                    >
-                      <div className="evaluation-row-main">
-                        <div className="evaluation-title">
-                          <strong>{evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12)}</strong>
-                          <p>
-                            {evaluation.model_name} · {evaluation.repr_type} → {evaluation.task_type}
-                          </p>
-                        </div>
-                        <div className="evaluation-meta">
-                          <span className={`pill pill-${tone}`}>
-                            {evaluation.status_summary.completed}/{evaluation.status_summary.total} done
-                          </span>
-                          <span>{metric}: {formatMetric(bestMetricForEvaluation(evaluation, metric))}</span>
-                          <span>{formatDate(evaluation.modified_at)}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+          <section className="panel evaluations-panel">
+            <div className="section-head">
+              <div>
+                <p className="section-kicker">Evaluations</p>
+                <h2>Runs in circulation</h2>
               </div>
-              <div className="pagination-bar">
-                <button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
-                  Previous
-                </button>
-                <span>
-                  Page {page} / {totalPages}
-                </span>
-                <label className="page-size">
-                  <span>rows</span>
-                  <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
-                    {[10, 20, 50].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
-                  Next
-                </button>
+              <div className="inline-metrics">
+                <span>completed {currentSnapshot.completed}</span>
+                <span>running {currentSnapshot.running}</span>
+                <span>failed {currentSnapshot.failed}</span>
               </div>
-            </>
-          )}
-        </section>
+            </div>
+            {loadingOverview ? (
+              <div className="loading-shell">Loading evaluations…</div>
+            ) : (
+              <>
+                <div className="evaluation-table">
+                  {evaluations.map((evaluation) => {
+                    const tone = statusTone(
+                      evaluation.status_summary.completed,
+                      evaluation.status_summary.running,
+                      evaluation.status_summary.failed,
+                    );
+                    return (
+                      <button
+                        key={evaluation.signature}
+                        className={`evaluation-row ${selectedSignature === evaluation.signature ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedSignature(evaluation.signature);
+                          setOpenedLogSession(null);
+                        }}
+                      >
+                        <div className="evaluation-row-main">
+                          <div className="evaluation-title">
+                            <strong>{evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12)}</strong>
+                            <p>
+                              {evaluation.model_name} · {evaluation.repr_type} → {evaluation.task_type}
+                            </p>
+                          </div>
+                          <div className="evaluation-meta">
+                            <span className={`pill pill-${tone}`}>
+                              {evaluation.status_summary.completed}/{evaluation.status_summary.total} done
+                            </span>
+                            <span>{metric}: {formatMetric(bestMetricForEvaluation(evaluation, metric))}</span>
+                            <span>{formatDate(evaluation.modified_at)}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="pagination-bar">
+                  <button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+                    Previous
+                  </button>
+                  <span>
+                    Page {page} / {totalPages}
+                  </span>
+                  <label className="page-size">
+                    <span>rows</span>
+                    <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                      {[10, 20, 50].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
+                    Next
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
 
         <section className="panel detail-panel">
           <div className="section-head">
@@ -583,4 +585,3 @@ export default function App() {
     </div>
   );
 }
-
