@@ -641,8 +641,8 @@ button:disabled {
 }
 
 .detail-hero h3 {
-  font-size: clamp(1.8rem, 4vw, 3.2rem);
-  line-height: 0.98;
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  line-height: 1.08;
 }
 
 .detail-hero-copy {
@@ -653,6 +653,7 @@ button:disabled {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .detail-hero p {
@@ -668,38 +669,103 @@ button:disabled {
   min-width: 0;
 }
 
+.detail-meta-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin: 0.8rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.detail-meta-list dt {
+  color: color-mix(in oklab, var(--oxide) 72%, black 28%);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.detail-meta-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .detail-tags span,
 .metric-chip {
   border: 1px solid var(--line);
   background: var(--panel-deep);
 }
 
-.metric-lines {
+.metric-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.65rem;
   min-width: 0;
 }
 
-.metric-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.7rem;
-  padding: 0.8rem 0.9rem;
+.metric-matrix {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: var(--panel-deep);
+  overflow: hidden;
 }
 
-.metric-line span,
-.metric-line em {
+.metric-matrix th,
+.metric-matrix td {
+  border-bottom: 1px solid color-mix(in oklab, var(--line) 76%, white 24%);
+  padding: 0.7rem 0.75rem;
+  text-align: right;
+  font-size: 0.86rem;
+}
+
+.metric-matrix th:first-child,
+.metric-matrix td:first-child {
+  text-align: left;
+}
+
+.metric-matrix thead th {
   color: var(--ink-soft);
-  font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.metric-line strong {
+.metric-matrix tbody tr:last-child th,
+.metric-matrix tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.metric-scalars {
   display: grid;
-  justify-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.55rem;
+}
+
+.metric-scalars > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--panel-deep);
+}
+
+.metric-scalars span {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.metric-scalars strong {
+  flex: 0 0 auto;
 }
 
 .experiment-grid {

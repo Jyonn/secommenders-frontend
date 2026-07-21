@@ -70,8 +70,10 @@ function formatMetric(value: number | null | undefined) {
   return value.toFixed(4);
 }
 
-function displayName(evaluation: Pick<EvaluationSummary, 'name' | 'run_id' | 'signature'>) {
-  return evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12);
+function compactEvaluationTitle(evaluation: EvaluationDetail) {
+  return [evaluation.data_name, evaluation.model_name, `${evaluation.repr_type || '?'}→${evaluation.task_type || '?'}`]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function normalizeStatus(status: string) {
@@ -81,22 +83,77 @@ function normalizeStatus(status: string) {
   return status || 'unknown';
 }
 
-function MetricLines({ metrics }: { metrics: Record<string, [number, number]> | null | undefined }) {
-  const entries = Object.entries(metrics || {}).slice(0, 8);
-  if (!entries.length) {
+function isDisplayMetric(key: string) {
+  const lower = key.toLowerCase();
+  if (lower.startsWith('beam_') || lower.includes('beam_width') || lower.includes('unique_items')) {
+    return false;
+  }
+  return /@\d+$/.test(lower) || ['loss', 'mrr'].includes(lower) || lower.endsWith('_acc') || lower.endsWith('acc');
+}
+
+function performanceFromEvaluation(evaluation: EvaluationDetail) {
+  return evaluation.experiments.find((experiment) => experiment.is_completed && experiment.performance)?.performance || null;
+}
+
+function MetricMatrix({ performance }: { performance: Record<string, number> | null | undefined }) {
+  const metricEntries = Object.entries(performance || {}).filter(([key, value]) => {
+    return typeof value === 'number' && isDisplayMetric(key);
+  });
+  if (!metricEntries.length) {
     return <p className="empty-copy">No metrics.</p>;
   }
+  const matrix = new Map<string, Map<string, number>>();
+  const scalarEntries: Array<[string, number]> = [];
+  metricEntries.forEach(([key, value]) => {
+    const match = key.toLowerCase().match(/^(.+)@(\d+)$/);
+    if (!match) {
+      scalarEntries.push([key, value]);
+      return;
+    }
+    const [, name, k] = match;
+    if (!matrix.has(name)) {
+      matrix.set(name, new Map());
+    }
+    matrix.get(name)?.set(k, value);
+  });
+  const metricNames = Array.from(matrix.keys()).sort();
+  const topKs = Array.from(new Set(metricNames.flatMap((name) => Array.from(matrix.get(name)?.keys() || [])))).sort(
+    (left, right) => Number(left) - Number(right),
+  );
   return (
-    <div className="metric-lines">
-      {entries.map(([key, [mean, std]]) => (
-        <div key={key} className="metric-line">
-          <span>{key}</span>
-          <strong>
-            {mean.toFixed(4)}
-            <em>±{std.toFixed(4)}</em>
-          </strong>
+    <div className="metric-board">
+      {metricNames.length ? (
+        <table className="metric-matrix">
+          <thead>
+            <tr>
+              <th>metric</th>
+              {topKs.map((k) => (
+                <th key={k}>@{k}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {metricNames.map((name) => (
+              <tr key={name}>
+                <th>{name}</th>
+                {topKs.map((k) => (
+                  <td key={k}>{formatMetric(matrix.get(name)?.get(k))}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {scalarEntries.length ? (
+        <div className="metric-scalars">
+          {scalarEntries.map(([key, value]) => (
+            <div key={key}>
+              <span>{key}</span>
+              <strong>{formatMetric(value)}</strong>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
@@ -290,6 +347,7 @@ function ExperimentCard({
       </p>
       <div className="metric-chip-row">
         {Object.entries(experiment.performance || {})
+          .filter(([metric, value]) => typeof value === 'number' && isDisplayMetric(metric))
           .slice(0, 6)
           .map(([metric, value]) => (
             <span key={metric} className="metric-chip">
@@ -323,20 +381,33 @@ function EvaluationDetailPanel({
     <div className="detail-stack">
       <div className="detail-hero">
         <div className="detail-hero-copy">
-          <h3 className="detail-title">{displayName(evaluation)}</h3>
-          <p>
-            {evaluation.model_name || 'model?'} · {evaluation.repr_type || 'repr?'} → {evaluation.task_type || 'task?'}
-          </p>
+          <h3 className="detail-title">{compactEvaluationTitle(evaluation)}</h3>
+          <dl className="detail-meta-list">
+            {evaluation.run_id ? (
+              <>
+                <dt>run id</dt>
+                <dd>{evaluation.run_id}</dd>
+              </>
+            ) : null}
+            <dt>signature</dt>
+            <dd>{evaluation.signature}</dd>
+            {evaluation.plan_name ? (
+              <>
+                <dt>plan</dt>
+                <dd>{evaluation.plan_name}</dd>
+              </>
+            ) : null}
+          </dl>
         </div>
         <div className="detail-tags">
-          {evaluation.plan_name ? <span>{evaluation.plan_name}</span> : null}
-          {evaluation.data_name ? <span>{evaluation.data_name}</span> : null}
+          {evaluation.repr_source_model ? <span>source:{evaluation.repr_source_model}</span> : null}
+          {evaluation.repr_combine ? <span>combine:{evaluation.repr_combine}</span> : null}
           {evaluation.sid_coder ? <span>sid:{evaluation.sid_coder}</span> : null}
           {evaluation.hash_coder ? <span>hash:{evaluation.hash_coder}</span> : null}
         </div>
       </div>
 
-      <MetricLines metrics={evaluation.performance_summary} />
+      <MetricMatrix performance={performanceFromEvaluation(evaluation)} />
 
       <div className="experiment-grid">
         {evaluation.experiments.map((experiment) => (
@@ -642,11 +713,7 @@ export default function App() {
           <div className="section-head">
             <div>
               <p className="section-kicker">Evaluation</p>
-              <h2>{selectedEvaluation ? displayName(selectedEvaluation) : 'No selection'}</h2>
-            </div>
-            <div className="inline-metrics">
-              <span>{evaluationTotal} filtered</span>
-              <span>completed {currentSnapshot.completed}</span>
+              <h2>{selectedEvaluation ? 'Detail' : 'No selection'}</h2>
             </div>
           </div>
           <EvaluationDetailPanel
