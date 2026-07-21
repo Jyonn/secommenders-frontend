@@ -145,13 +145,15 @@ button:disabled {
   backdrop-filter: blur(18px);
 }
 
-.select-control {
+.choice-control {
+  position: relative;
   display: grid;
   gap: 0.34rem;
   min-width: 0;
 }
 
-.select-control span {
+.choice-control > span,
+.choice-label span {
   color: var(--ink-soft);
   font-size: 0.7rem;
   font-weight: 800;
@@ -159,9 +161,8 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.select-control select,
-.select-control input,
-.page-size select,
+.choice-control input,
+.choice-trigger,
 .pagination-bar button,
 .ghost-button,
 .primary-button,
@@ -174,15 +175,123 @@ button:disabled {
   padding: 0.68rem 0.82rem;
 }
 
-.select-control.compact select {
+.choice-control.compact .choice-trigger {
   min-height: 2.6rem;
 }
 
-.select-control select:focus,
-.select-control input:focus,
-.page-size select:focus {
+.choice-control input:focus,
+.choice-trigger:focus {
   outline: 2px solid color-mix(in oklab, var(--oxide) 32%, white 68%);
   outline-offset: 1px;
+}
+
+.choice-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.choice-clear {
+  border: 0;
+  background: transparent;
+  color: color-mix(in oklab, var(--oxide) 80%, black 20%);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0;
+}
+
+.choice-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  text-align: left;
+}
+
+.choice-trigger.open,
+.choice-trigger:hover {
+  border-color: color-mix(in oklab, var(--oxide) 48%, var(--line) 52%);
+}
+
+.choice-trigger span,
+.choice-trigger em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice-trigger em {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.choice-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 0;
+  z-index: 30;
+  width: min(26rem, max(100%, 18rem));
+  max-width: calc(100vw - 2rem);
+  padding: 0.55rem;
+  border: 1px solid color-mix(in oklab, var(--oxide) 34%, var(--line) 66%);
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--panel) 94%, white 6%);
+  box-shadow: 0 18px 48px color-mix(in oklab, var(--ink) 18%, transparent);
+}
+
+.choice-popover input {
+  width: 100%;
+  margin-bottom: 0.45rem;
+}
+
+.choice-list {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.choice-option {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-radius: 0.72rem;
+  background: transparent;
+  color: var(--ink);
+  padding: 0.48rem 0.55rem;
+  text-align: left;
+}
+
+.choice-option:hover,
+.choice-option.selected {
+  background: color-mix(in oklab, var(--oxide-soft) 38%, white 62%);
+}
+
+.choice-option span {
+  color: var(--oxide);
+  font-weight: 900;
+}
+
+.choice-option strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.choice-empty {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--ink-soft);
 }
 
 .primary-button {
@@ -501,7 +610,8 @@ button:disabled {
   margin: 0.625rem;
   padding: 1.05rem;
   border-radius: 1.45rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   animation: slide-in 180ms ease-out;
 }
 
@@ -521,7 +631,8 @@ button:disabled {
 }
 
 .filter-sheet-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
 }
 
 .sheet-actions {
@@ -534,10 +645,11 @@ button:disabled {
 }
 
 .detail-hero {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+  min-width: 0;
 }
 
 .detail-hero h3 {
@@ -562,10 +674,10 @@ button:disabled {
 
 .detail-tags {
   display: flex;
-  flex: 0 1 36%;
   flex-wrap: wrap;
   gap: 0.45rem;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .detail-tags span,
@@ -576,8 +688,9 @@ button:disabled {
 
 .metric-lines {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.65rem;
+  min-width: 0;
 }
 
 .metric-line {
@@ -602,7 +715,8 @@ button:disabled {
 }
 
 .experiment-grid {
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  min-width: 0;
 }
 
 .metric-chip-row {
@@ -614,7 +728,7 @@ button:disabled {
 
 .detail-columns {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -638,9 +752,11 @@ button:disabled {
 .log-panel {
   margin: 0;
   padding: 1rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: color-mix(in oklab, var(--ink) 88%, black 12%);
   font-family: 'SFMono-Regular', 'JetBrains Mono', monospace;
   font-size: 0.82rem;

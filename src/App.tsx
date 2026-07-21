@@ -17,23 +17,23 @@ import type {
 } from './types';
 
 type Filters = {
-  planName: string;
-  dataName: string;
-  modelName: string;
-  taskType: string;
-  reprType: string;
-  runId: string;
+  planName: string[];
+  dataName: string[];
+  modelName: string[];
+  taskType: string[];
+  reprType: string[];
+  runId: string[];
 };
 
 type SelectField = keyof Filters;
 
 const DEFAULT_FILTERS: Filters = {
-  planName: '',
-  dataName: '',
-  modelName: '',
-  taskType: '',
-  reprType: '',
-  runId: '',
+  planName: [],
+  dataName: [],
+  modelName: [],
+  taskType: [],
+  reprType: [],
+  runId: [],
 };
 
 const FALLBACK_METRICS = ['ndcg@10', 'ndcg@20', 'hr@10', 'hr@20', 'mrr', 'loss'];
@@ -176,31 +176,88 @@ function ExperimentLog({ session }: { session: string }) {
   return <pre className="log-panel">{(log || []).join('\n') || 'No log captured.'}</pre>;
 }
 
-function SelectControl({
+function ChoiceBox({
   label,
   value,
   options,
   onChange,
+  multiple = true,
   compact = false,
 }: {
   label: string;
-  value: string;
+  value: string[];
   options: string[];
-  onChange: (value: string) => void;
+  onChange: (value: string[]) => void;
+  multiple?: boolean;
   compact?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = new Set(value);
+  const visibleOptions = options
+    .filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()))
+    .slice(0, 80);
+  const summary = value.length
+    ? value.length === 1
+      ? value[0]
+      : `${value[0]} +${value.length - 1}`
+    : 'All';
+
+  function toggleOption(option: string) {
+    if (multiple) {
+      onChange(selected.has(option) ? value.filter((item) => item !== option) : [...value, option]);
+      return;
+    }
+    onChange([option]);
+    setOpen(false);
+  }
+
   return (
-    <label className={compact ? 'select-control compact' : 'select-control'}>
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">All</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className={compact ? 'choice-control compact' : 'choice-control'}>
+      <div className="choice-label">
+        <span>{label}</span>
+        {multiple && value.length ? (
+          <button className="choice-clear" onClick={() => onChange([])} type="button">
+            clear
+          </button>
+        ) : null}
+      </div>
+      <button
+        className={`choice-trigger ${open ? 'open' : ''}`}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span>{summary}</span>
+        <em>{multiple ? `${value.length}/${options.length || 0}` : 'one'}</em>
+      </button>
+      {open ? (
+        <div className="choice-popover">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Search ${label.toLowerCase()}`}
+            autoFocus
+          />
+          <div className="choice-list">
+            {visibleOptions.length ? (
+              visibleOptions.map((option) => (
+                <button
+                  key={option}
+                  className={selected.has(option) ? 'choice-option selected' : 'choice-option'}
+                  onClick={() => toggleOption(option)}
+                  type="button"
+                >
+                  <span>{selected.has(option) ? '✓' : ''}</span>
+                  <strong>{option}</strong>
+                </button>
+              ))
+            ) : (
+              <p className="choice-empty">No match.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -487,7 +544,7 @@ export default function App() {
   }, [evaluations]);
 
   const metricOptions = options?.metrics?.length ? options.metrics : FALLBACK_METRICS;
-  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const activeFilterCount = Object.values(filters).reduce((sum, values) => sum + values.length, 0);
   const openedExperiment = selectedEvaluation?.experiments.find((experiment) => experiment.session === openedLogSession);
 
   function optionValues(field: keyof EvaluationOptions) {
@@ -495,9 +552,16 @@ export default function App() {
     return Array.isArray(values) ? values : [];
   }
 
-  function updateFilter(key: SelectField, value: string) {
+  function updateFilter(key: SelectField, value: string[]) {
     setPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function removeFilterValue(key: SelectField, value: string) {
+    updateFilter(
+      key,
+      filters[key].filter((item) => item !== value),
+    );
   }
 
   function openEvaluation(signature: string) {
@@ -534,35 +598,42 @@ export default function App() {
       </header>
 
       <section className="command-bar">
-        <SelectControl
+        <ChoiceBox
           compact
           label="DATA"
           value={filters.dataName}
           options={optionValues('data_name')}
           onChange={(value) => updateFilter('dataName', value)}
         />
-        <SelectControl
+        <ChoiceBox
           compact
           label="MODEL"
           value={filters.modelName}
           options={optionValues('model_name')}
           onChange={(value) => updateFilter('modelName', value)}
         />
-        <SelectControl
+        <ChoiceBox
           compact
           label="TASK"
           value={filters.taskType}
           options={optionValues('task_type')}
           onChange={(value) => updateFilter('taskType', value)}
         />
-        <SelectControl
+        <ChoiceBox
           compact
           label="REPR"
           value={filters.reprType}
           options={optionValues('repr_type')}
           onChange={(value) => updateFilter('reprType', value)}
         />
-        <SelectControl compact label="METRIC" value={metric} options={metricOptions} onChange={setMetric} />
+        <ChoiceBox
+          compact
+          multiple={false}
+          label="METRIC"
+          value={[metric]}
+          options={metricOptions}
+          onChange={(value) => setMetric(value[0] || FALLBACK_METRICS[0])}
+        />
         <button className="primary-button" onClick={() => setFilterSheetOpen(true)}>
           Filters {activeFilterCount ? <span>{activeFilterCount}</span> : null}
         </button>
@@ -570,13 +641,13 @@ export default function App() {
 
       {activeFilterCount ? (
         <div className="active-filters">
-          {FILTER_FIELDS.map((field) =>
-            filters[field.key] ? (
-              <button key={field.key} onClick={() => updateFilter(field.key, '')}>
+          {FILTER_FIELDS.flatMap((field) =>
+            filters[field.key].map((value) => (
+              <button key={`${field.key}:${value}`} onClick={() => removeFilterValue(field.key, value)}>
                 <span>{field.label}</span>
-                {filters[field.key]}
+                {value}
               </button>
-            ) : null,
+            )),
           )}
         </div>
       ) : null}
@@ -674,16 +745,16 @@ export default function App() {
                 <span>
                   {page} / {totalPages}
                 </span>
-                <label className="page-size">
-                  <span>rows</span>
-                  <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
-                    {[10, 20, 50, 100].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="page-size">
+                  <ChoiceBox
+                    compact
+                    multiple={false}
+                    label="ROWS"
+                    value={[String(pageSize)]}
+                    options={['10', '20', '50', '100']}
+                    onChange={(value) => setPageSize(Number(value[0] || 20))}
+                  />
+                </div>
                 <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
                   Next
                 </button>
@@ -700,7 +771,7 @@ export default function App() {
       <Sheet open={filterSheetOpen} title="Filters" onClose={() => setFilterSheetOpen(false)}>
         <div className="filter-sheet-grid">
           {FILTER_FIELDS.map((field) => (
-            <SelectControl
+            <ChoiceBox
               key={field.key}
               label={field.label}
               value={filters[field.key]}
@@ -708,8 +779,14 @@ export default function App() {
               onChange={(value) => updateFilter(field.key, value)}
             />
           ))}
-          <SelectControl label="METRIC" value={metric} options={metricOptions} onChange={setMetric} />
-          <label className="select-control">
+          <ChoiceBox
+            multiple={false}
+            label="METRIC"
+            value={[metric]}
+            options={metricOptions}
+            onChange={(value) => setMetric(value[0] || FALLBACK_METRICS[0])}
+          />
+          <label className="choice-control">
             <span>REPLICATE</span>
             <input
               type="number"

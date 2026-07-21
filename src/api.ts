@@ -9,13 +9,17 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-function buildQuery(params: Record<string, string | number | undefined | null>) {
+function buildQuery(params: Record<string, string | string[] | number | undefined | null>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) {
       return;
     }
-    search.set(key, String(value));
+    if (Array.isArray(value)) {
+      search.set(key, value.join(','));
+    } else {
+      search.set(key, String(value));
+    }
   });
   const serialized = search.toString();
   return serialized ? `?${serialized}` : '';
@@ -37,12 +41,12 @@ export function getRuntimeStats() {
 export function getEvaluations(params: {
   page: number;
   pageSize: number;
-  planName?: string;
-  dataName?: string;
-  modelName?: string;
-  taskType?: string;
-  reprType?: string;
-  runId?: string;
+  planName?: string[];
+  dataName?: string[];
+  modelName?: string[];
+  taskType?: string[];
+  reprType?: string[];
+  runId?: string[];
 }) {
   return fetchApi<EvaluationListResponse>(
     `/evaluations/${buildQuery({
@@ -69,10 +73,10 @@ export function getEvaluationOptions() {
 export function getLeaderboard(params: {
   metric: string;
   replicate: number;
-  dataName?: string;
-  modelName?: string;
-  taskType?: string;
-  reprType?: string;
+  dataName?: string[];
+  modelName?: string[];
+  taskType?: string[];
+  reprType?: string[];
   limit?: number;
 }) {
   return fetchApi<LeaderboardRow[]>(
