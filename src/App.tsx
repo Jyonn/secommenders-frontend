@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   getEvaluation,
@@ -48,20 +48,7 @@ const FILTER_FIELDS: Array<{
   { key: 'modelName', label: 'MODEL', optionKey: 'model_name' },
   { key: 'taskType', label: 'TASK', optionKey: 'task_type' },
   { key: 'reprType', label: 'REPR', optionKey: 'repr_type' },
-  { key: 'runId', label: 'RUN', optionKey: 'run_id' },
 ];
-
-function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return '—';
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
 
 function formatDuration(seconds: number | null | undefined) {
   if (seconds === null || seconds === undefined) {
@@ -85,29 +72,6 @@ function formatMetric(value: number | null | undefined) {
 
 function displayName(evaluation: Pick<EvaluationSummary, 'name' | 'run_id' | 'signature'>) {
   return evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12);
-}
-
-function bestMetricForEvaluation(evaluation: EvaluationSummary, metric: string) {
-  const values = evaluation.experiments
-    .map((experiment) => experiment.performance?.[metric])
-    .filter((value): value is number => typeof value === 'number');
-  if (!values.length) {
-    return null;
-  }
-  return metric === 'loss' ? Math.min(...values) : Math.max(...values);
-}
-
-function statusTone(completed: number, running: number, failed: number) {
-  if (running > 0) {
-    return 'running';
-  }
-  if (failed > 0 && completed === 0) {
-    return 'failed';
-  }
-  if (failed > 0) {
-    return 'mixed';
-  }
-  return 'steady';
 }
 
 function normalizeStatus(status: string) {
@@ -191,6 +155,7 @@ function ChoiceBox({
   multiple?: boolean;
   compact?: boolean;
 }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = new Set(value);
@@ -212,8 +177,21 @@ function ChoiceBox({
     setOpen(false);
   }
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
   return (
-    <div className={compact ? 'choice-control compact' : 'choice-control'}>
+    <div ref={rootRef} className={compact ? 'choice-control compact' : 'choice-control'}>
       <div className="choice-label">
         <span>{label}</span>
         {multiple && value.length ? (
@@ -257,35 +235,6 @@ function ChoiceBox({
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function Drawer({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) {
-    return null;
-  }
-  return (
-    <div className="overlay" onMouseDown={onClose}>
-      <aside className="drawer" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="overlay-head">
-          <span>{title}</span>
-          <button className="icon-button" onClick={onClose} aria-label="Close detail">
-            ×
-          </button>
-        </div>
-        {children}
-      </aside>
     </div>
   );
 }
@@ -355,7 +304,7 @@ function ExperimentCard({
   );
 }
 
-function EvaluationDrawer({
+function EvaluationDetailPanel({
   evaluation,
   loading,
   onOpenLog,
@@ -411,8 +360,6 @@ function EvaluationDrawer({
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
   const [metric, setMetric] = useState('ndcg@10');
   const [replicate, setReplicate] = useState(1);
 
@@ -420,14 +367,12 @@ export default function App() {
   const [runtimeHours, setRuntimeHours] = useState<number | null>(null);
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [evaluationTotal, setEvaluationTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null);
   const [openedLogSession, setOpenedLogSession] = useState<string | null>(null);
 
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [logSheetOpen, setLogSheetOpen] = useState(false);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -458,8 +403,8 @@ export default function App() {
     Promise.all([
       getRuntimeStats(),
       getEvaluations({
-        page,
-        pageSize,
+        page: 1,
+        pageSize: 100,
         planName: filters.planName,
         dataName: filters.dataName,
         modelName: filters.modelName,
@@ -484,13 +429,16 @@ export default function App() {
         setRuntimeHours(runtime.runtime_hours);
         setEvaluations(evaluationList.evaluations);
         setEvaluationTotal(evaluationList.total);
-        setTotalPages(evaluationList.total_page || 1);
         setLeaderboard(leaderboardRows);
         setSelectedSignature((current) => {
-          if (current && evaluationList.evaluations.some((evaluation) => evaluation.signature === current)) {
+          const visibleSignatures = new Set([
+            ...leaderboardRows.map((row) => row.signature),
+            ...evaluationList.evaluations.map((evaluation) => evaluation.signature),
+          ]);
+          if (current && visibleSignatures.has(current)) {
             return current;
           }
-          return evaluationList.evaluations[0]?.signature || null;
+          return leaderboardRows[0]?.signature || evaluationList.evaluations[0]?.signature || null;
         });
       })
       .catch((err: Error) => {
@@ -506,7 +454,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [filters, metric, page, pageSize, replicate]);
+  }, [filters, metric, replicate]);
 
   useEffect(() => {
     if (!selectedSignature) {
@@ -553,7 +501,6 @@ export default function App() {
   }
 
   function updateFilter(key: SelectField, value: string[]) {
-    setPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
@@ -566,7 +513,6 @@ export default function App() {
 
   function openEvaluation(signature: string) {
     setSelectedSignature(signature);
-    setDetailDrawerOpen(true);
   }
 
   function openLog(session: string) {
@@ -665,7 +611,7 @@ export default function App() {
           </div>
           {loadingOverview ? (
             <div className="loading-shell">Loading leaderboard…</div>
-          ) : (
+          ) : leaderboard.length ? (
             <div className="leaderboard-list">
               {leaderboard.map((row, index) => (
                 <button
@@ -687,86 +633,29 @@ export default function App() {
                 </button>
               ))}
             </div>
+          ) : (
+            <div className="empty-shell">No leaderboard rows for this filter.</div>
           )}
         </section>
 
-        <section className="panel evaluations-panel">
+        <section className="panel detail-panel">
           <div className="section-head">
             <div>
-              <p className="section-kicker">Evaluations</p>
-              <h2>{evaluationTotal} runs</h2>
+              <p className="section-kicker">Evaluation</p>
+              <h2>{selectedEvaluation ? displayName(selectedEvaluation) : 'No selection'}</h2>
             </div>
             <div className="inline-metrics">
+              <span>{evaluationTotal} filtered</span>
               <span>completed {currentSnapshot.completed}</span>
-              <span>failed {currentSnapshot.failed}</span>
             </div>
           </div>
-          {loadingOverview ? (
-            <div className="loading-shell">Loading evaluations…</div>
-          ) : (
-            <>
-              <div className="evaluation-table">
-                {evaluations.map((evaluation) => {
-                  const tone = statusTone(
-                    evaluation.status_summary.completed,
-                    evaluation.status_summary.running,
-                    evaluation.status_summary.failed,
-                  );
-                  return (
-                    <button
-                      key={evaluation.signature}
-                      className={`evaluation-row ${selectedSignature === evaluation.signature ? 'selected' : ''}`}
-                      onClick={() => openEvaluation(evaluation.signature)}
-                    >
-                      <div className="evaluation-row-main">
-                        <div className="evaluation-title">
-                          <strong>{displayName(evaluation)}</strong>
-                          <p>
-                            {evaluation.data_name} · {evaluation.model_name} · {evaluation.repr_type} →{' '}
-                            {evaluation.task_type}
-                          </p>
-                        </div>
-                        <div className="evaluation-meta">
-                          <span className={`pill pill-${tone}`}>
-                            {evaluation.status_summary.completed}/{evaluation.status_summary.total}
-                          </span>
-                          <span>{metric}: {formatMetric(bestMetricForEvaluation(evaluation, metric))}</span>
-                          <span>{formatDate(evaluation.modified_at)}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="pagination-bar">
-                <button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
-                  Prev
-                </button>
-                <span>
-                  {page} / {totalPages}
-                </span>
-                <div className="page-size">
-                  <ChoiceBox
-                    compact
-                    multiple={false}
-                    label="ROWS"
-                    value={[String(pageSize)]}
-                    options={['10', '20', '50', '100']}
-                    onChange={(value) => setPageSize(Number(value[0] || 20))}
-                  />
-                </div>
-                <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
-                  Next
-                </button>
-              </div>
-            </>
-          )}
+          <EvaluationDetailPanel
+            evaluation={selectedEvaluation}
+            loading={loadingDetail || loadingOverview}
+            onOpenLog={openLog}
+          />
         </section>
       </main>
-
-      <Drawer open={detailDrawerOpen} title="Evaluation" onClose={() => setDetailDrawerOpen(false)}>
-        <EvaluationDrawer evaluation={selectedEvaluation} loading={loadingDetail} onOpenLog={openLog} />
-      </Drawer>
 
       <Sheet open={filterSheetOpen} title="Filters" onClose={() => setFilterSheetOpen(false)}>
         <div className="filter-sheet-grid">
@@ -801,7 +690,6 @@ export default function App() {
             className="ghost-button"
             onClick={() => {
               setFilters(DEFAULT_FILTERS);
-              setPage(1);
             }}
           >
             Clear

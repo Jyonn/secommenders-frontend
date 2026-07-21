@@ -125,8 +125,7 @@ button:disabled {
 
 .command-bar,
 .panel,
-.sheet,
-.drawer {
+.sheet {
   border: 1px solid color-mix(in oklab, var(--line) 82%, white 18%);
   background: color-mix(in oklab, var(--panel) 90%, white 10%);
   box-shadow: var(--shadow);
@@ -604,17 +603,6 @@ button:disabled {
   line-height: 1;
 }
 
-.drawer {
-  width: min(860px, calc(100vw - 1.25rem));
-  height: calc(100vh - 1.25rem);
-  margin: 0.625rem;
-  padding: 1.05rem;
-  border-radius: 1.45rem;
-  overflow-x: hidden;
-  overflow-y: auto;
-  animation: slide-in 180ms ease-out;
-}
-
 .sheet-overlay {
   align-items: end;
   justify-content: center;
@@ -768,17 +756,6 @@ button:disabled {
   border-radius: 1rem;
   background: oklch(0.2 0.02 55);
   color: oklch(0.91 0.015 88);
-}
-
-@keyframes slide-in {
-  from {
-    transform: translateX(24px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
 }
 
 @keyframes rise-in {
