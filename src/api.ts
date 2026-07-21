@@ -2,6 +2,7 @@ import type {
   ApiEnvelope,
   EvaluationDetail,
   EvaluationListResponse,
+  EvaluationOptions,
   LeaderboardRow,
   RuntimeStats,
 } from './types';
@@ -61,6 +62,10 @@ export function getEvaluation(signature: string) {
   return fetchApi<EvaluationDetail>(`/evaluations/${signature}`);
 }
 
+export function getEvaluationOptions() {
+  return fetchApi<EvaluationOptions>('/evaluations/options');
+}
+
 export function getLeaderboard(params: {
   metric: string;
   replicate: number;
@@ -86,4 +91,3 @@ export function getLeaderboard(params: {
 export function getExperimentLog(session: string) {
   return fetchApi<string[]>(`/experiments/log${buildQuery({ session })}`);
 }
-

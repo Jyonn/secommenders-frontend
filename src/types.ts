@@ -56,6 +56,20 @@ export type EvaluationListResponse = {
   total: number;
 };
 
+export type EvaluationOptions = {
+  plan_name: string[];
+  data_name: string[];
+  model_name: string[];
+  task_type: string[];
+  repr_type: string[];
+  repr_source_model: string[];
+  repr_combine: string[];
+  sid_coder: string[];
+  hash_coder: string[];
+  run_id: string[];
+  metrics: string[];
+};
+
 export type ExperimentDetail = {
   signature: string;
   session: string;
@@ -107,4 +121,3 @@ export type LeaderboardRow = {
 export type RuntimeStats = {
   runtime_hours: number;
 };
-

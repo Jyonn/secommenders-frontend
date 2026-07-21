@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getEvaluation, getEvaluations, getExperimentLog, getLeaderboard, getRuntimeStats } from './api';
-import type { EvaluationDetail, EvaluationSummary, ExperimentDetail, LeaderboardRow } from './types';
+import type { ReactNode } from 'react';
+import {
+  getEvaluation,
+  getEvaluationOptions,
+  getEvaluations,
+  getExperimentLog,
+  getLeaderboard,
+  getRuntimeStats,
+} from './api';
+import type {
+  EvaluationDetail,
+  EvaluationOptions,
+  EvaluationSummary,
+  ExperimentDetail,
+  LeaderboardRow,
+} from './types';
 
 type Filters = {
   planName: string;
@@ -11,6 +25,8 @@ type Filters = {
   runId: string;
 };
 
+type SelectField = keyof Filters;
+
 const DEFAULT_FILTERS: Filters = {
   planName: '',
   dataName: '',
@@ -20,14 +36,26 @@ const DEFAULT_FILTERS: Filters = {
   runId: '',
 };
 
-const METRIC_OPTIONS = ['hr@5', 'hr@10', 'hr@20', 'ndcg@5', 'ndcg@10', 'ndcg@20', 'loss'];
+const FALLBACK_METRICS = ['ndcg@10', 'ndcg@20', 'hr@10', 'hr@20', 'mrr', 'loss'];
+
+const FILTER_FIELDS: Array<{
+  key: SelectField;
+  label: string;
+  optionKey: keyof EvaluationOptions;
+}> = [
+  { key: 'planName', label: 'PLAN', optionKey: 'plan_name' },
+  { key: 'dataName', label: 'DATA', optionKey: 'data_name' },
+  { key: 'modelName', label: 'MODEL', optionKey: 'model_name' },
+  { key: 'taskType', label: 'TASK', optionKey: 'task_type' },
+  { key: 'reprType', label: 'REPR', optionKey: 'repr_type' },
+  { key: 'runId', label: 'RUN', optionKey: 'run_id' },
+];
 
 function formatDate(value: string | null | undefined) {
   if (!value) {
     return '—';
   }
   return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
@@ -55,6 +83,10 @@ function formatMetric(value: number | null | undefined) {
   return value.toFixed(4);
 }
 
+function displayName(evaluation: Pick<EvaluationSummary, 'name' | 'run_id' | 'signature'>) {
+  return evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12);
+}
+
 function bestMetricForEvaluation(evaluation: EvaluationSummary, metric: string) {
   const values = evaluation.experiments
     .map((experiment) => experiment.performance?.[metric])
@@ -78,10 +110,17 @@ function statusTone(completed: number, running: number, failed: number) {
   return 'steady';
 }
 
+function normalizeStatus(status: string) {
+  if (status === 'finished') {
+    return 'completed';
+  }
+  return status || 'unknown';
+}
+
 function MetricLines({ metrics }: { metrics: Record<string, [number, number]> | null | undefined }) {
-  const entries = Object.entries(metrics || {}).slice(0, 6);
+  const entries = Object.entries(metrics || {}).slice(0, 8);
   if (!entries.length) {
-    return <p className="empty-copy">No metric summary yet.</p>;
+    return <p className="empty-copy">No metrics.</p>;
   }
   return (
     <div className="metric-lines">
@@ -137,20 +176,105 @@ function ExperimentLog({ session }: { session: string }) {
   return <pre className="log-panel">{(log || []).join('\n') || 'No log captured.'}</pre>;
 }
 
+function SelectControl({
+  label,
+  value,
+  options,
+  onChange,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <label className={compact ? 'select-control compact' : 'select-control'}>
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">All</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Drawer({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <div className="overlay" onMouseDown={onClose}>
+      <aside className="drawer" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="overlay-head">
+          <span>{title}</span>
+          <button className="icon-button" onClick={onClose} aria-label="Close detail">
+            ×
+          </button>
+        </div>
+        {children}
+      </aside>
+    </div>
+  );
+}
+
+function Sheet({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <div className="overlay sheet-overlay" onMouseDown={onClose}>
+      <section className="sheet" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="overlay-head">
+          <span>{title}</span>
+          <button className="icon-button" onClick={onClose} aria-label="Close sheet">
+            ×
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
+  );
+}
+
 function ExperimentCard({
   experiment,
-  active,
   onOpenLog,
 }: {
   experiment: ExperimentDetail;
-  active: boolean;
   onOpenLog: (session: string) => void;
 }) {
+  const status = normalizeStatus(experiment.status);
   return (
-    <article className={`experiment-card ${active ? 'active' : ''}`}>
+    <article className="experiment-card">
       <div className="experiment-topline">
         <div>
-          <span className={`badge badge-${experiment.status}`}>{experiment.status}</span>
+          <span className={`badge badge-${status}`}>{status}</span>
           <strong>seed {experiment.seed}</strong>
         </div>
         <span>{formatDuration(experiment.runtime_seconds)}</span>
@@ -159,16 +283,72 @@ function ExperimentCard({
         phase={experiment.phase || '—'} · best_epoch={experiment.best_epoch ?? '—'} · main={experiment.main_metric || '—'}
       </p>
       <div className="metric-chip-row">
-        {Object.entries(experiment.performance || {}).slice(0, 5).map(([metric, value]) => (
-          <span key={metric} className="metric-chip">
-            {metric}: {formatMetric(value)}
-          </span>
-        ))}
+        {Object.entries(experiment.performance || {})
+          .slice(0, 6)
+          .map(([metric, value]) => (
+            <span key={metric} className="metric-chip">
+              {metric}: {formatMetric(value)}
+            </span>
+          ))}
       </div>
       <button className="ghost-button" onClick={() => onOpenLog(experiment.session)}>
-        Open log
+        Log
       </button>
     </article>
+  );
+}
+
+function EvaluationDrawer({
+  evaluation,
+  loading,
+  onOpenLog,
+}: {
+  evaluation: EvaluationDetail | null;
+  loading: boolean;
+  onOpenLog: (session: string) => void;
+}) {
+  if (loading) {
+    return <div className="loading-shell">Loading detail…</div>;
+  }
+  if (!evaluation) {
+    return <div className="empty-shell">Pick an evaluation.</div>;
+  }
+  return (
+    <div className="detail-stack">
+      <div className="detail-hero">
+        <div className="detail-hero-copy">
+          <h3 className="detail-title">{displayName(evaluation)}</h3>
+          <p>
+            {evaluation.model_name || 'model?'} · {evaluation.repr_type || 'repr?'} → {evaluation.task_type || 'task?'}
+          </p>
+        </div>
+        <div className="detail-tags">
+          {evaluation.plan_name ? <span>{evaluation.plan_name}</span> : null}
+          {evaluation.data_name ? <span>{evaluation.data_name}</span> : null}
+          {evaluation.sid_coder ? <span>sid:{evaluation.sid_coder}</span> : null}
+          {evaluation.hash_coder ? <span>hash:{evaluation.hash_coder}</span> : null}
+        </div>
+      </div>
+
+      <MetricLines metrics={evaluation.performance_summary} />
+
+      <div className="experiment-grid">
+        {evaluation.experiments.map((experiment) => (
+          <ExperimentCard key={experiment.session} experiment={experiment} onOpenLog={onOpenLog} />
+        ))}
+      </div>
+
+      <div className="detail-columns">
+        <details className="detail-block">
+          <summary>Configuration</summary>
+          <pre>{JSON.stringify(evaluation.configuration, null, 2)}</pre>
+        </details>
+        <details className="detail-block">
+          <summary>Command</summary>
+          <pre>{evaluation.command}</pre>
+        </details>
+      </div>
+    </div>
   );
 }
 
@@ -179,6 +359,7 @@ export default function App() {
   const [metric, setMetric] = useState('ndcg@10');
   const [replicate, setReplicate] = useState(1);
 
+  const [options, setOptions] = useState<EvaluationOptions | null>(null);
   const [runtimeHours, setRuntimeHours] = useState<number | null>(null);
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [evaluationTotal, setEvaluationTotal] = useState(0);
@@ -188,9 +369,30 @@ export default function App() {
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null);
   const [openedLogSession, setOpenedLogSession] = useState<string | null>(null);
 
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [logSheetOpen, setLogSheetOpen] = useState(false);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEvaluationOptions()
+      .then((payload) => {
+        if (!cancelled) {
+          setOptions(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOptions(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,9 +429,12 @@ export default function App() {
         setEvaluationTotal(evaluationList.total);
         setTotalPages(evaluationList.total_page || 1);
         setLeaderboard(leaderboardRows);
-        if (!selectedSignature && evaluationList.evaluations[0]) {
-          setSelectedSignature(evaluationList.evaluations[0].signature);
-        }
+        setSelectedSignature((current) => {
+          if (current && evaluationList.evaluations.some((evaluation) => evaluation.signature === current)) {
+            return current;
+          }
+          return evaluationList.evaluations[0]?.signature || null;
+        });
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -244,7 +449,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [filters, metric, page, pageSize, replicate, selectedSignature]);
+  }, [filters, metric, page, pageSize, replicate]);
 
   useEffect(() => {
     if (!selectedSignature) {
@@ -257,9 +462,6 @@ export default function App() {
       .then((detail) => {
         if (!cancelled) {
           setSelectedEvaluation(detail);
-          if (!openedLogSession && detail.experiments[0]) {
-            setOpenedLogSession(detail.experiments[0].session);
-          }
         }
       })
       .catch((err: Error) => {
@@ -275,7 +477,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [openedLogSession, selectedSignature]);
+  }, [selectedSignature]);
 
   const currentSnapshot = useMemo(() => {
     const completed = evaluations.reduce((sum, item) => sum + item.status_summary.completed, 0);
@@ -284,113 +486,231 @@ export default function App() {
     return { completed, running, failed };
   }, [evaluations]);
 
+  const metricOptions = options?.metrics?.length ? options.metrics : FALLBACK_METRICS;
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const openedExperiment = selectedEvaluation?.experiments.find((experiment) => experiment.session === openedLogSession);
+
+  function optionValues(field: keyof EvaluationOptions) {
+    const values = options?.[field];
+    return Array.isArray(values) ? values : [];
+  }
+
+  function updateFilter(key: SelectField, value: string) {
+    setPage(1);
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function openEvaluation(signature: string) {
+    setSelectedSignature(signature);
+    setDetailDrawerOpen(true);
+  }
+
+  function openLog(session: string) {
+    setOpenedLogSession(session);
+    setLogSheetOpen(true);
+  }
+
   return (
     <div className="app-shell">
-      <header className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">Secommenders / Experiment desk</p>
-          <h1>Read the benchmark like an editor, not a logfile.</h1>
-          <p className="hero-text">
-            A lightweight frontend for the Secommenders backend: scan rankings, audit runs, compare seeds,
-            and crack open logs without touching the database.
-          </p>
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Secommenders</p>
+          <h1>Experiment Workbench</h1>
         </div>
-        <div className="hero-summary">
-          <div className="summary-ribbon">
+        <div className="summary-deck">
+          <div>
             <span>runtime</span>
             <strong>{runtimeHours === null ? '—' : `${runtimeHours.toFixed(1)}h`}</strong>
           </div>
-          <div className="summary-ribbon">
-            <span>visible evals</span>
+          <div>
+            <span>evals</span>
             <strong>{evaluationTotal}</strong>
           </div>
-          <div className="summary-ribbon">
+          <div>
             <span>running</span>
             <strong>{currentSnapshot.running}</strong>
           </div>
         </div>
       </header>
 
-      <section className="control-strip">
-        <div className="filter-grid">
-          <label>
-            <span>Plan</span>
-            <input
-              value={filters.planName}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, planName: event.target.value }));
-              }}
-              placeholder="basic_recifvideo"
-            />
-          </label>
-          <label>
-            <span>Data</span>
-            <input
-              value={filters.dataName}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, dataName: event.target.value }));
-              }}
-              placeholder="mind"
-            />
-          </label>
-          <label>
-            <span>Model</span>
-            <input
-              value={filters.modelName}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, modelName: event.target.value }));
-              }}
-              placeholder="llama3"
-            />
-          </label>
-          <label>
-            <span>Task</span>
-            <input
-              value={filters.taskType}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, taskType: event.target.value }));
-              }}
-              placeholder="sid"
-            />
-          </label>
-          <label>
-            <span>Repr</span>
-            <input
-              value={filters.reprType}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, reprType: event.target.value }));
-              }}
-              placeholder="sid+text"
-            />
-          </label>
-          <label>
-            <span>Run ID</span>
-            <input
-              value={filters.runId}
-              onChange={(event) => {
-                setPage(1);
-                setFilters((current) => ({ ...current, runId: event.target.value }));
-              }}
-              placeholder="llama3__sid2sid"
-            />
-          </label>
-          <label>
-            <span>Metric</span>
-            <select value={metric} onChange={(event) => setMetric(event.target.value)}>
-              {METRIC_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
+      <section className="command-bar">
+        <SelectControl
+          compact
+          label="DATA"
+          value={filters.dataName}
+          options={optionValues('data_name')}
+          onChange={(value) => updateFilter('dataName', value)}
+        />
+        <SelectControl
+          compact
+          label="MODEL"
+          value={filters.modelName}
+          options={optionValues('model_name')}
+          onChange={(value) => updateFilter('modelName', value)}
+        />
+        <SelectControl
+          compact
+          label="TASK"
+          value={filters.taskType}
+          options={optionValues('task_type')}
+          onChange={(value) => updateFilter('taskType', value)}
+        />
+        <SelectControl
+          compact
+          label="REPR"
+          value={filters.reprType}
+          options={optionValues('repr_type')}
+          onChange={(value) => updateFilter('reprType', value)}
+        />
+        <SelectControl compact label="METRIC" value={metric} options={metricOptions} onChange={setMetric} />
+        <button className="primary-button" onClick={() => setFilterSheetOpen(true)}>
+          Filters {activeFilterCount ? <span>{activeFilterCount}</span> : null}
+        </button>
+      </section>
+
+      {activeFilterCount ? (
+        <div className="active-filters">
+          {FILTER_FIELDS.map((field) =>
+            filters[field.key] ? (
+              <button key={field.key} onClick={() => updateFilter(field.key, '')}>
+                <span>{field.label}</span>
+                {filters[field.key]}
+              </button>
+            ) : null,
+          )}
+        </div>
+      ) : null}
+
+      {error ? <div className="error-shell">{error}</div> : null}
+
+      <main className="workspace-grid">
+        <section className="panel leaderboard-panel">
+          <div className="section-head">
+            <div>
+              <p className="section-kicker">Leaderboard</p>
+              <h2>{metric}</h2>
+            </div>
+            <span className="section-note">replicate ≥ {replicate}</span>
+          </div>
+          {loadingOverview ? (
+            <div className="loading-shell">Loading leaderboard…</div>
+          ) : (
+            <div className="leaderboard-list">
+              {leaderboard.map((row, index) => (
+                <button
+                  key={row.signature}
+                  className={`leaderboard-entry ${selectedSignature === row.signature ? 'selected' : ''}`}
+                  onClick={() => openEvaluation(row.signature)}
+                >
+                  <div className="leaderboard-rank">{String(index + 1).padStart(2, '0')}</div>
+                  <div className="leaderboard-body">
+                    <strong>{row.name || row.run_id || row.signature.slice(0, 10)}</strong>
+                    <p>
+                      {row.data_name} · {row.model_name} · {row.repr_type} → {row.task_type}
+                    </p>
+                  </div>
+                  <div className="leaderboard-score">
+                    <strong>{row.mean.toFixed(4)}</strong>
+                    <em>±{row.std.toFixed(4)}</em>
+                  </div>
+                </button>
               ))}
-            </select>
-          </label>
-          <label>
-            <span>Replicate</span>
+            </div>
+          )}
+        </section>
+
+        <section className="panel evaluations-panel">
+          <div className="section-head">
+            <div>
+              <p className="section-kicker">Evaluations</p>
+              <h2>{evaluationTotal} runs</h2>
+            </div>
+            <div className="inline-metrics">
+              <span>completed {currentSnapshot.completed}</span>
+              <span>failed {currentSnapshot.failed}</span>
+            </div>
+          </div>
+          {loadingOverview ? (
+            <div className="loading-shell">Loading evaluations…</div>
+          ) : (
+            <>
+              <div className="evaluation-table">
+                {evaluations.map((evaluation) => {
+                  const tone = statusTone(
+                    evaluation.status_summary.completed,
+                    evaluation.status_summary.running,
+                    evaluation.status_summary.failed,
+                  );
+                  return (
+                    <button
+                      key={evaluation.signature}
+                      className={`evaluation-row ${selectedSignature === evaluation.signature ? 'selected' : ''}`}
+                      onClick={() => openEvaluation(evaluation.signature)}
+                    >
+                      <div className="evaluation-row-main">
+                        <div className="evaluation-title">
+                          <strong>{displayName(evaluation)}</strong>
+                          <p>
+                            {evaluation.data_name} · {evaluation.model_name} · {evaluation.repr_type} →{' '}
+                            {evaluation.task_type}
+                          </p>
+                        </div>
+                        <div className="evaluation-meta">
+                          <span className={`pill pill-${tone}`}>
+                            {evaluation.status_summary.completed}/{evaluation.status_summary.total}
+                          </span>
+                          <span>{metric}: {formatMetric(bestMetricForEvaluation(evaluation, metric))}</span>
+                          <span>{formatDate(evaluation.modified_at)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="pagination-bar">
+                <button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+                  Prev
+                </button>
+                <span>
+                  {page} / {totalPages}
+                </span>
+                <label className="page-size">
+                  <span>rows</span>
+                  <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                    {[10, 20, 50, 100].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
+                  Next
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </main>
+
+      <Drawer open={detailDrawerOpen} title="Evaluation" onClose={() => setDetailDrawerOpen(false)}>
+        <EvaluationDrawer evaluation={selectedEvaluation} loading={loadingDetail} onOpenLog={openLog} />
+      </Drawer>
+
+      <Sheet open={filterSheetOpen} title="Filters" onClose={() => setFilterSheetOpen(false)}>
+        <div className="filter-sheet-grid">
+          {FILTER_FIELDS.map((field) => (
+            <SelectControl
+              key={field.key}
+              label={field.label}
+              value={filters[field.key]}
+              options={optionValues(field.optionKey)}
+              onChange={(value) => updateFilter(field.key, value)}
+            />
+          ))}
+          <SelectControl label="METRIC" value={metric} options={metricOptions} onChange={setMetric} />
+          <label className="select-control">
+            <span>REPLICATE</span>
             <input
               type="number"
               min={1}
@@ -399,189 +719,29 @@ export default function App() {
             />
           </label>
         </div>
-      </section>
-
-      {error ? <div className="error-shell">{error}</div> : null}
-
-      <main className="workspace-grid">
-        <div className="overview-stack">
-          <section className="panel leaderboard-panel">
-            <div className="section-head">
-              <div>
-                <p className="section-kicker">Leaderboard</p>
-                <h2>What is actually winning</h2>
-              </div>
-              <span className="section-note">metric={metric}</span>
-            </div>
-            {loadingOverview ? (
-              <div className="loading-shell">Loading leaderboard…</div>
-            ) : (
-              <div className="leaderboard-list">
-                {leaderboard.map((row, index) => (
-                  <button
-                    key={row.signature}
-                    className={`leaderboard-entry ${selectedSignature === row.signature ? 'selected' : ''}`}
-                    onClick={() => setSelectedSignature(row.signature)}
-                  >
-                    <div className="leaderboard-rank">{String(index + 1).padStart(2, '0')}</div>
-                    <div className="leaderboard-body">
-                      <strong>{row.name || row.run_id || row.signature.slice(0, 10)}</strong>
-                      <p>
-                        {row.model_name} · {row.repr_type} → {row.task_type}
-                      </p>
-                    </div>
-                    <div className="leaderboard-score">
-                      <span>{row.metric}</span>
-                      <strong>{row.mean.toFixed(4)}</strong>
-                      <em>±{row.std.toFixed(4)}</em>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="panel evaluations-panel">
-            <div className="section-head">
-              <div>
-                <p className="section-kicker">Evaluations</p>
-                <h2>Runs in circulation</h2>
-              </div>
-              <div className="inline-metrics">
-                <span>completed {currentSnapshot.completed}</span>
-                <span>running {currentSnapshot.running}</span>
-                <span>failed {currentSnapshot.failed}</span>
-              </div>
-            </div>
-            {loadingOverview ? (
-              <div className="loading-shell">Loading evaluations…</div>
-            ) : (
-              <>
-                <div className="evaluation-table">
-                  {evaluations.map((evaluation) => {
-                    const tone = statusTone(
-                      evaluation.status_summary.completed,
-                      evaluation.status_summary.running,
-                      evaluation.status_summary.failed,
-                    );
-                    return (
-                      <button
-                        key={evaluation.signature}
-                        className={`evaluation-row ${selectedSignature === evaluation.signature ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedSignature(evaluation.signature);
-                          setOpenedLogSession(null);
-                        }}
-                      >
-                        <div className="evaluation-row-main">
-                          <div className="evaluation-title">
-                            <strong>{evaluation.name || evaluation.run_id || evaluation.signature.slice(0, 12)}</strong>
-                            <p>
-                              {evaluation.model_name} · {evaluation.repr_type} → {evaluation.task_type}
-                            </p>
-                          </div>
-                          <div className="evaluation-meta">
-                            <span className={`pill pill-${tone}`}>
-                              {evaluation.status_summary.completed}/{evaluation.status_summary.total} done
-                            </span>
-                            <span>{metric}: {formatMetric(bestMetricForEvaluation(evaluation, metric))}</span>
-                            <span>{formatDate(evaluation.modified_at)}</span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="pagination-bar">
-                  <button disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
-                    Previous
-                  </button>
-                  <span>
-                    Page {page} / {totalPages}
-                  </span>
-                  <label className="page-size">
-                    <span>rows</span>
-                    <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
-                      {[10, 20, 50].map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
-                    Next
-                  </button>
-                </div>
-              </>
-            )}
-          </section>
+        <div className="sheet-actions">
+          <button
+            className="ghost-button"
+            onClick={() => {
+              setFilters(DEFAULT_FILTERS);
+              setPage(1);
+            }}
+          >
+            Clear
+          </button>
+          <button className="primary-button" onClick={() => setFilterSheetOpen(false)}>
+            Apply
+          </button>
         </div>
+      </Sheet>
 
-        <section className="panel detail-panel">
-          <div className="section-head">
-            <div>
-              <p className="section-kicker">Evaluation detail</p>
-              <h2>Explain the run, then show the evidence</h2>
-            </div>
-            {selectedEvaluation ? <span className="section-note">{selectedEvaluation.signature.slice(0, 12)}</span> : null}
-          </div>
-
-          {loadingDetail ? (
-            <div className="loading-shell">Loading detail…</div>
-          ) : !selectedEvaluation ? (
-            <div className="empty-shell">Pick an evaluation from the list or leaderboard.</div>
-          ) : (
-            <div className="detail-stack">
-              <div className="detail-hero">
-                <div className="detail-hero-copy">
-                  <h3 className="detail-title">{selectedEvaluation.name || selectedEvaluation.run_id}</h3>
-                  <p>
-                    {selectedEvaluation.model_name} · {selectedEvaluation.repr_type} → {selectedEvaluation.task_type}
-                  </p>
-                </div>
-                <div className="detail-tags">
-                  {selectedEvaluation.plan_name ? <span>{selectedEvaluation.plan_name}</span> : null}
-                  {selectedEvaluation.data_name ? <span>{selectedEvaluation.data_name}</span> : null}
-                  {selectedEvaluation.sid_coder ? <span>sid:{selectedEvaluation.sid_coder}</span> : null}
-                  {selectedEvaluation.hash_coder ? <span>hash:{selectedEvaluation.hash_coder}</span> : null}
-                </div>
-              </div>
-
-              <MetricLines metrics={selectedEvaluation.performance_summary} />
-
-              <div className="detail-columns">
-                <div className="detail-block">
-                  <h4>Configuration snapshot</h4>
-                  <pre>{JSON.stringify(selectedEvaluation.configuration, null, 2)}</pre>
-                </div>
-                <div className="detail-block">
-                  <h4>Command</h4>
-                  <pre>{selectedEvaluation.command}</pre>
-                </div>
-              </div>
-
-              <div className="experiment-grid">
-                {selectedEvaluation.experiments.map((experiment) => (
-                  <ExperimentCard
-                    key={experiment.session}
-                    experiment={experiment}
-                    active={openedLogSession === experiment.session}
-                    onOpenLog={setOpenedLogSession}
-                  />
-                ))}
-              </div>
-
-              {openedLogSession ? (
-                <div className="detail-block">
-                  <h4>Experiment log</h4>
-                  <ExperimentLog session={openedLogSession} />
-                </div>
-              ) : null}
-            </div>
-          )}
-        </section>
-      </main>
+      <Sheet
+        open={logSheetOpen && Boolean(openedLogSession)}
+        title={openedExperiment ? `seed ${openedExperiment.seed} · ${normalizeStatus(openedExperiment.status)}` : 'Log'}
+        onClose={() => setLogSheetOpen(false)}
+      >
+        {openedLogSession ? <ExperimentLog session={openedLogSession} /> : null}
+      </Sheet>
     </div>
   );
 }
