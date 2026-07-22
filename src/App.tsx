@@ -70,6 +70,13 @@ function formatMetric(value: number | null | undefined) {
   return value.toFixed(4);
 }
 
+function formatEpoch(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+  return Math.round(value).toString();
+}
+
 function compactEvaluationTitle(evaluation: EvaluationDetail) {
   return [evaluation.data_name, evaluation.model_name, `${evaluation.repr_type || '?'}→${evaluation.task_type || '?'}`]
     .filter(Boolean)
@@ -692,9 +699,9 @@ export default function App() {
                 >
                   <div className="leaderboard-rank">{String(index + 1).padStart(2, '0')}</div>
                   <div className="leaderboard-body">
-                    <strong>{row.name || row.run_id || row.signature.slice(0, 10)}</strong>
+                    <strong>{[row.plan_name, row.data_name].filter(Boolean).join(' · ')}</strong>
                     <p>
-                      {row.data_name} · {row.model_name} · {row.repr_type} → {row.task_type}
+                      {row.model_name} · {row.repr_type} → {row.task_type} · epoch {formatEpoch(row.avg_epoch)}
                     </p>
                   </div>
                   <div className="leaderboard-score">

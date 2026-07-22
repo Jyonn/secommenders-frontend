@@ -115,6 +115,7 @@ export type LeaderboardRow = {
   mean: number;
   std: number;
   replicate: number;
+  avg_epoch: number | null;
   performance: Record<string, [number, number]>;
 };
 
